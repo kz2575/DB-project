@@ -1,0 +1,37 @@
+{% extends 'base.html' %}
+
+{% block title %}Find Order Items{% endblock %}
+
+{% block header %}
+<h2>Find Items in Order</h2>
+{% endblock %}
+
+{% block content %}
+<form method="post" class="form-container">
+  <label for="order_id">Enter Order ID:</label>
+  <input type="text" id="order_id" name="order_id" required placeholder="Enter Order ID">
+  <button type="submit">Search</button>
+</form>
+
+{% if results %}
+  <h3>Order Items and Storage Locations</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>Item ID</th>
+        <th>Room Number</th>
+        <th>Shelf Number</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in results %}
+        <tr>
+          <td>{{ row['itemID'] }}</td>
+          <td>{{ row['roomNum'] or 'N/A' }}</td>
+          <td>{{ row['shelfNum'] or 'N/A' }}</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+{% endif %}
+{% endblock %}

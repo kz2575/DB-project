@@ -1,0 +1,16 @@
+{% extends 'base.html' %}
+
+{% block title %}Add Role{% endblock %}
+
+{% block header %}
+<h2>Add New Role</h2>
+{% endblock %}
+
+{% block content %}
+<form method="post" class="form-container">
+  <label for="role_description">Role Description:</label>
+  <textarea id="role_description" name="role_description" required placeholder="Enter Role Description"></textarea>
+
+  <button type="submit">Add Role</button>
+</form>
+{% endblock %}

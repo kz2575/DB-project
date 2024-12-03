@@ -1,0 +1,43 @@
+{% extends 'base.html' %}
+
+{% block title %}Accept Donation{% endblock %}
+
+{% block header %}
+<h2>Accept Donation</h2>
+{% endblock %}
+
+{% block content %}
+<form method="post" class="form-container">
+  <label for="donor_id">Donor ID:</label>
+  <input type="text" id="donor_id" name="donor_id" required>
+
+  <label for="item_description">Item Description:</label>
+  <textarea id="item_description" name="item_description" required></textarea>
+
+  <label for="main_category">Main Category:</label>
+  <input type="text" id="main_category" name="main_category" required>
+
+  <label for="sub_category">Sub Category:</label>
+  <input type="text" id="sub_category" name="sub_category" required>
+
+  <label for="color">Color:</label>
+  <input type="text" id="color" name="color">
+
+  <label for="material">Material:</label>
+  <input type="text" id="material" name="material">
+
+  <label for="is_new">Is the item new?</label>
+  <input type="checkbox" id="is_new" name="is_new">
+
+  <label for="requires_assembly">Requires Assembly?</label>
+  <input type="checkbox" id="requires_assembly" name="requires_assembly">
+
+  <label for="room_num">Room Number:</label>
+  <input type="text" id="room_num" name="room_num" required>
+
+  <label for="shelf_num">Shelf Number:</label>
+  <input type="text" id="shelf_num" name="shelf_num" required>
+
+  <button type="submit">Accept Donation</button>
+</form>
+{% endblock %}
