@@ -1,0 +1,16 @@
+{% extends 'base.html' %}
+
+{% block title %}Start Order{% endblock %}
+
+{% block header %}
+<h2>Start a New Order</h2>
+{% endblock %}
+
+{% block content %}
+<form method="post" class="form-container">
+  <label for="client_username">Client Username:</label>
+  <input type="text" id="client_username" name="client_username" required placeholder="Enter Client Username">
+
+  <button type="submit">Start Order</button>
+</form>
+{% endblock %}

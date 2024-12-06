@@ -6,15 +6,20 @@ from werkzeug.security import check_password_hash, generate_password_hash
 from .db import get_db
 from flask_login import LoginManager, UserMixin
 from flask_login import login_user, logout_user, current_user, login_required
+from flask import session
+
+
 # Define your User class that extends UserMixin
 class User(UserMixin):
     def __init__(self, user_id, username):
         self.id = user_id
         self.username = username
+
+
 def create_auth_blueprint(login_manager: LoginManager):
     bp = Blueprint('auth', __name__, url_prefix='/auth')
 
-    #login_manager.init_app(current_app)
+    # login_manager.init_app(current_app)
 
     @login_manager.user_loader
     def load_user(user_id):
@@ -75,11 +80,8 @@ def create_auth_blueprint(login_manager: LoginManager):
 
         return render_template('auth/register.html')
 
-
-
     @bp.route('/login', methods=('GET', 'POST'))
     def login():
-
 
         if current_user.is_authenticated:
             return redirect(url_for('auth.index'))
@@ -101,13 +103,11 @@ def create_auth_blueprint(login_manager: LoginManager):
             elif not check_password_hash(user[4], password):
                 error = 'Incorrect password.'
 
-
-
             if error is None:
                 res_dict = dict(zip(columns, user))
                 user_id = res_dict.get("cid")
                 username = res_dict.get("username")
-                wrapped_user=User(user_id, username)
+                wrapped_user = User(user_id, username)
                 login_user(wrapped_user)
                 return redirect(url_for('auth.index'))  # change to your main page here
             flash(error)
@@ -342,6 +342,102 @@ def create_auth_blueprint(login_manager: LoginManager):
 
         return render_template('auth/add_role.html')
 
+    @bp.route('/start_order', methods=('GET', 'POST'))
+    @login_required
+    def start_order():
+        db = get_db()
+        cursor = db.cursor(dictionary=True)
+
+        if request.method == 'POST':
+            client_username = request.form['client_username']
+            error = None
+
+            # 验证用户名
+            cursor.execute('SELECT * FROM user WHERE userName = %s', (client_username,))
+            client = cursor.fetchone()
+            if not client:
+                error = f"Client username {client_username} does not exist."
+
+            if error is None:
+                try:
+                    # 创建订单
+                    cursor.execute(
+                        """
+                        INSERT INTO Ordered (orderDate, supervisor, client)
+                        VALUES (NOW(), %s, %s)
+                        """,
+                        (current_user.username, client_username)
+                    )
+                    db.commit()
+
+                    order_id = cursor.lastrowid
+
+                    session['current_order_id'] = order_id
+                    flash(f"Order {order_id} started successfully for client {client_username}.")
+                    return redirect(url_for('auth.index'))
+                except Exception as e:
+                    db.rollback()
+                    error = f"An error occurred: {e}"
+
+            flash(error)
+
+        return render_template('auth/start_order.html')
+
+    @bp.route('/add_to_order', methods=('GET', 'POST'))
+    @login_required
+    def add_to_order():
+        db = get_db()
+        cursor = db.cursor(dictionary=True)
+        error = None
+
+        order_id = session.get('current_order_id')
+        if not order_id:
+            flash("No active order found. Start an order first.")
+            return redirect(url_for('auth.start_order'))
+
+        # 获取类别和子类别
+        cursor.execute("SELECT DISTINCT mainCategory, subCategory FROM Category")
+        categories = cursor.fetchall()
+
+        items = None  # 用于存储查询的物品列表
+        if request.method == 'POST':
+            main_category = request.form.get('main_category')
+            sub_category = request.form.get('sub_category')
+            item_id = request.form.get('item_id')
+
+            if main_category and sub_category:
+                # 查询属于指定类别且未被订购的物品
+                cursor.execute(
+                    """
+                    SELECT * FROM Item
+                    WHERE mainCategory = %s AND subCategory = %s AND itemID NOT IN (
+                        SELECT itemID FROM ItemIn
+                    )
+                    """,
+                    (main_category, sub_category)
+                )
+                items = cursor.fetchall()
+
+            if item_id:
+                try:
+                    # 将物品添加到订单
+                    cursor.execute(
+                        """
+                        INSERT INTO ItemIn (itemID, orderID, found)
+                        VALUES (%s, %s, %s)
+                        """,
+                        (item_id, order_id, False)
+                    )
+                    db.commit()
+                    flash(f"Item {item_id} added to order {order_id} successfully.")
+                    return redirect(request.url)
+                except Exception as e:
+                    db.rollback()
+                    error = f"An error occurred: {e}"
+
+        if error:
+            flash(error)
+
+        return render_template('auth/add_to_order.html', categories=categories, items=items)
+
     return bp
-
-
