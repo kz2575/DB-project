@@ -39,46 +39,75 @@ def create_auth_blueprint(login_manager: LoginManager):
 
     @bp.route('/register', methods=('GET', 'POST'))
     def register():
+        db = get_db()
+        print(db)
+        cursor = db.cursor()
+        cursor.execute("SELECT rDescription FROM Role")
+        available_roles = [row[0] for row in cursor.fetchall()]
         if request.method == 'POST':
             username = request.form['username']
             password = request.form['password']
             first_name = request.form['first_name']
             last_name = request.form['last_name']
-            billing_address = request.form['billing_address']
-            db = get_db()
-            print(db)
+            email = request.form['email']
+            role = request.form['role']  # Added for role selection
+
             error = None
-            cursor = db.cursor()
-            cursor.execute("SELECT 1 FROM user WHERE username = %s", (username,))
+
+            # Check if username already exists
+            cursor.execute("SELECT * FROM user WHERE username = %s", (username,))
             existing_user = cursor.fetchone()
+
+            # Error handling for missing fields
             if not username:
                 error = 'Username is required.'
             elif not password:
                 error = 'Password is required.'
-            elif (not first_name) or (not last_name):
+            elif not first_name or not last_name:
                 error = 'Name is required.'
-            elif not billing_address:
-                error = 'Billing Address is required.'
+            elif not email:
+                error = 'Email is required.'
+            elif role not in available_roles:
+                error = 'Invalid role selected.'
             elif existing_user:
                 error = f"User {username} is already registered."
 
             if error is None:
                 print("here")
                 try:
+                    # Insert user into the user table
                     cursor.execute(
-                        "INSERT INTO user (first_name, last_name, username, password, billAddr) "
-                        "VALUES (%s, %s, %s, %s, %s)",
-                        (first_name, last_name, username, generate_password_hash(password), billing_address),
+                        """
+                        INSERT INTO user (first_name, last_name, username, password, email) 
+                        VALUES (%s, %s, %s, %s, %s)
+                        """,
+                        (first_name, last_name, username, generate_password_hash(password), email),
                     )
                     db.commit()
+
+                    # Fetch roleID for the selected role
+                    cursor.execute("SELECT roleID FROM Role WHERE rDescription = %s", (role,))
+                    role_id = cursor.fetchone()
+
+                    if role_id:
+                        # Insert user role into Act table
+                        cursor.execute(
+                            """
+                            INSERT INTO Act (userName, roleID)
+                            VALUES (%s, %s)
+                            """,
+                            (username, role_id[0]),
+                        )
+                        db.commit()
+                    else:
+                        error = f"Role {role} does not exist. Contact admin to set up roles."
+
+                    return redirect(url_for("auth.login"))
                 except mysql.connector.IntegrityError:
                     error = f"User {username} is already registered."
-                else:
-                    return redirect(url_for("auth.login"))
-
             flash(error)
 
-        return render_template('auth/register.html')
+        return render_template('auth/register.html', roles=available_roles)
 
     @bp.route('/login', methods=('GET', 'POST'))
     def login():
@@ -120,8 +149,36 @@ def create_auth_blueprint(login_manager: LoginManager):
         return redirect(url_for('auth.login'))
 
     @bp.route('/index', methods=('GET', 'POST'))
+    @login_required
     def index():
-        return render_template('auth/index.html')
+        db = get_db()
+        cursor = db.cursor(dictionary=True)
+
+        # 获取当前用户的角色
+        cursor.execute(
+            """
+            SELECT r.rDescription 
+            FROM Role r
+            JOIN Act a ON r.roleID = a.roleID
+            WHERE a.userName = %s
+            """,
+            (current_user.username,)
+        )
+        roles = [row['rDescription'] for row in cursor.fetchall()]
+
+        # 定义基础功能按钮
+        buttons = [
+            {"name": "Find Item", "url": url_for('auth.find_item')},
+            {"name": "Find Order", "url": url_for('auth.find_order')},
+            {"name": "Add to Order", "url": url_for('auth.add_to_order')}
+        ]
+
+        # 如果用户是 staff，则添加额外的功能按钮
+        if 'staff' in roles:
+            buttons.append({"name": "Accept Donation", "url": url_for('auth.accept_donation')})
+            buttons.append({"name": "Start Order", "url": url_for('auth.start_order')})
+
+        return render_template('auth/index.html', buttons=buttons)
 
     @bp.route('/find_item', methods=('GET', 'POST'))
     def find_item():
@@ -256,95 +313,12 @@ def create_auth_blueprint(login_manager: LoginManager):
 
         return render_template('auth/accept_donation.html')
 
-    @bp.route('/assign_role', methods=('GET', 'POST'))
-    @login_required
-    def assign_role():
-        if request.method == 'POST':
-            username = request.form['username']
-            role_description = request.form['role_description']
-
-            db = get_db()
-            cursor = db.cursor(dictionary=True)
-            error = None
-
-            cursor.execute('SELECT * FROM user WHERE userName = %s', (username,))
-            user = cursor.fetchone()
-            if not user:
-                error = f"User {username} does not exist."
-
-            cursor.execute('SELECT * FROM Role WHERE rDescription = %s', (role_description,))
-            role = cursor.fetchone()
-            if not role:
-                error = f"Role {role_description} does not exist."
-
-            if error is None:
-                cursor.execute(
-                    """
-                    SELECT * FROM Act WHERE userName = %s AND roleID = %s
-                    """,
-                    (username, role['roleID'])
-                )
-                existing_assignment = cursor.fetchone()
-                if existing_assignment:
-                    error = f"User {username} already has the role {role_description}."
-
-            if error is None:
-                try:
-                    cursor.execute(
-                        """
-                        INSERT INTO Act (userName, roleID)
-                        VALUES (%s, %s)
-                        """,
-                        (username, role['roleID'])
-                    )
-                    db.commit()
-                    flash(f"Role {role_description} assigned to {username} successfully.")
-                    return redirect(request.url)
-                except Exception as e:
-                    db.rollback()
-                    error = f"An error occurred: {e}"
-
-            flash(error)
-
-        return render_template('auth/assign_role.html')
-
-    @bp.route('/add_role', methods=('GET', 'POST'))
-    @login_required
-    def add_role():
-        if request.method == 'POST':
-            role_description = request.form['role_description']
-
-            db = get_db()
-            cursor = db.cursor(dictionary=True)
-            error = None
-
-            cursor.execute('SELECT * FROM Role WHERE rDescription = %s', (role_description,))
-            if cursor.fetchone():
-                error = f"Role '{role_description}' already exists."
-
-            if error is None:
-                try:
-                    cursor.execute(
-                        """
-                        INSERT INTO Role (rDescription)
-                        VALUES (%s)
-                        """,
-                        (role_description,)
-                    )
-                    db.commit()
-                    flash(f"Role '{role_description}' added successfully.")
-                    return redirect(request.url)
-                except Exception as e:
-                    db.rollback()
-                    error = f"An error occurred: {e}"
-
-            flash(error)
-
-        return render_template('auth/add_role.html')
-
     @bp.route('/start_order', methods=('GET', 'POST'))
     @login_required
     def start_order():
+        if not current_user.is_authenticated or not is_staff_user(current_user.username):
+            flash("You must be a staff member to accept donations.")
+            return redirect(url_for('auth.index'))
         db = get_db()
         cursor = db.cursor(dictionary=True)
 
@@ -390,47 +364,81 @@ def create_auth_blueprint(login_manager: LoginManager):
         cursor = db.cursor(dictionary=True)
         error = None
 
-        order_id = session.get('current_order_id')
-        if not order_id:
-            flash("No active order found. Start an order first.")
-            return redirect(url_for('auth.start_order'))
+        # 获取当前用户（client）关联的所有订单
+        cursor.execute(
+            """
+            SELECT o.orderID, o.orderDate, u.first_name AS supervisor_name, o.orderNotes
+            FROM Ordered o
+            JOIN user u ON o.supervisor = u.username
+            WHERE o.client = %s
+            ORDER BY o.orderDate DESC
+            """,
+            (current_user.username,)
+        )
+        orders = cursor.fetchall()
+
+        if not orders:
+            flash("No active orders found for your account.")
+            return redirect(url_for('auth.index'))
 
         # 获取类别和子类别
         cursor.execute("SELECT DISTINCT mainCategory, subCategory FROM Category")
         categories = cursor.fetchall()
 
         items = None  # 用于存储查询的物品列表
+        selected_order_id = None  # 用于存储用户选择的订单 ID
+
         if request.method == 'POST':
+            selected_order_id = request.form.get('order_id')
             main_category = request.form.get('main_category')
             sub_category = request.form.get('sub_category')
             item_id = request.form.get('item_id')
 
-            if main_category and sub_category:
+            if not selected_order_id:
+                error = "You must select an order to add items."
+            elif not any(order['orderID'] == int(selected_order_id) for order in orders):
+                error = "The selected order does not belong to your account."
+            elif main_category and sub_category:
                 # 查询属于指定类别且未被订购的物品
                 cursor.execute(
                     """
-                    SELECT * FROM Item
-                    WHERE mainCategory = %s AND subCategory = %s AND itemID NOT IN (
-                        SELECT itemID FROM ItemIn
-                    )
+                    SELECT i.itemID, i.iDescription, i.color, i.isNew, i.material
+                    FROM Item i
+                    WHERE i.mainCategory = %s 
+                      AND i.subCategory = %s
+                      AND i.itemID NOT IN (
+                          SELECT itemID FROM ItemIn
+                      )
                     """,
                     (main_category, sub_category)
                 )
                 items = cursor.fetchall()
 
-            if item_id:
+            if item_id and not error:
                 try:
-                    # 将物品添加到订单
+                    # 检查物品是否已在其他订单中
                     cursor.execute(
                         """
-                        INSERT INTO ItemIn (itemID, orderID, found)
-                        VALUES (%s, %s, %s)
+                        SELECT itemID FROM ItemIn 
+                        WHERE itemID = %s AND orderID != %s
                         """,
-                        (item_id, order_id, False)
+                        (item_id, selected_order_id)
                     )
-                    db.commit()
-                    flash(f"Item {item_id} added to order {order_id} successfully.")
-                    return redirect(request.url)
+                    existing_item = cursor.fetchone()
+                    if existing_item:
+                        error = f"Item {item_id} is already added to another order."
+                    else:
+                        # 将物品添加到订单
+                        cursor.execute(
+                            """
+                            INSERT INTO ItemIn (itemID, orderID, found)
+                            VALUES (%s, %s, %s)
+                            """,
+                            (item_id, selected_order_id, False)
+                        )
+                        db.commit()
+                        flash(f"Item {item_id} added to order {selected_order_id} successfully.")
+                        return redirect(request.url)
                 except Exception as e:
                     db.rollback()
                     error = f"An error occurred: {e}"
@@ -438,6 +446,12 @@ def create_auth_blueprint(login_manager: LoginManager):
         if error:
             flash(error)
 
-        return render_template('auth/add_to_order.html', categories=categories, items=items)
+        return render_template(
+            'auth/add_to_order.html',
+            orders=orders,
+            categories=categories,
+            items=items,
+            selected_order_id=selected_order_id
+        )
 
     return bp

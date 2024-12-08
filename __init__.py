@@ -1,6 +1,6 @@
 import os
 
-from flask import Flask
+from flask import Flask, render_template
 from flask_mysqldb import MySQL
 from flask_login import LoginManager
 def create_app(test_config=None):
@@ -34,11 +34,15 @@ def create_app(test_config=None):
     from .auth import create_auth_blueprint
     auth_bp = create_auth_blueprint(login_manager)
     app.register_blueprint(auth_bp)
-    app.add_url_rule('/', endpoint='auth.login')
+    # app.add_url_rule('/', endpoint='auth.login')
 
     #  a simple page that says hello
     @app.route('/hello')
     def hello():
         return 'Hello, World!'
+
+    @app.route('/')
+    def home():
+        return render_template('base.html')
 
     return app

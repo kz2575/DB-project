@@ -1,7 +1,14 @@
 {% extends 'base.html' %}
+
 {% block header %}
-  <h1>{% block title %}Index{% endblock %}</h1>
+  <h1>Welcome {{ current_user.username }}</h1>
 {% endblock %}
-<body>
-Change to your main page here!
-</body>
+
+{% block content %}
+  <p>Select one of the options below:</p>
+  <ul>
+    {% for button in buttons %}
+      <li><a href="{{ button.url }}">{{ button.name }}</a></li>
+    {% endfor %}
+  </ul>
+{% endblock %}

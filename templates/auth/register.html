@@ -5,22 +5,29 @@
 {% endblock %}
 
 {% block content %}
-  <form method="post">
-    <label for="username">Username</label>
-    <input name="username" id="username" required>
+  <form method="POST">
+    <label for="first_name">First Name:</label>
+    <input type="text" name="first_name" required>
 
-    <label for="password">Password</label>
-    <input type="password" name="password" id="password" required>
+    <label for="last_name">Last Name:</label>
+    <input type="text" name="last_name" required>
 
-    <label for="first_name">First Name</label>
-    <input name="first_name" id="first_name" required>
+    <label for="username">Username:</label>
+    <input type="text" name="username" required>
 
-    <label for="last_name">Last Name</label>
-    <input name="last_name" id="last_name" required>
+    <label for="password">Password:</label>
+    <input type="password" name="password" required>
 
-    <label for="billing_address">Billing Address</label>
-    <input name="billing_address" id="billing_address" required>
+    <label for="email">Email:</label>
+    <input type="email" name="email" required>
 
-    <input type="submit" value="Register">
+    <label for="role">Role:</label>
+    <select name="role" required>
+      {% for role in roles %}
+        <option value="{{ role }}">{{ role }}</option>
+      {% endfor %}
+    </select>
+
+    <button type="submit">Register</button>
   </form>
 {% endblock %}

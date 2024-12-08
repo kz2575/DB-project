@@ -36,6 +36,7 @@ def init_db():
         sql_commands = f.read().decode('utf8')
 
     cursor = db.cursor()
+    # handle multiple sql
     for result in cursor.execute(sql_commands, multi=True):
         pass
 
