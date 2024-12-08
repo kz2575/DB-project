@@ -15,10 +15,18 @@
   <textarea id="item_description" name="item_description" required></textarea>
 
   <label for="main_category">Main Category:</label>
-  <input type="text" id="main_category" name="main_category" required>
+  <select id="main_category" name="main_category" required>
+    {% for category in main_categories %}
+    <option value="{{ category }}">{{ category }}</option>
+    {% endfor %}
+  </select>
 
   <label for="sub_category">Sub Category:</label>
-  <input type="text" id="sub_category" name="sub_category" required>
+  <select id="sub_category" name="sub_category" required>
+    {% for category in sub_categories %}
+    <option value="{{ category }}">{{ category }}</option>
+    {% endfor %}
+  </select>
 
   <label for="color">Color:</label>
   <input type="text" id="color" name="color">
@@ -27,17 +35,80 @@
   <input type="text" id="material" name="material">
 
   <label for="is_new">Is the item new?</label>
-  <input type="checkbox" id="is_new" name="is_new">
+  <select id="is_new" name="is_new">
+    <option value="yes">Yes</option>
+    <option value="no" selected>No</option>
+  </select>
 
-  <label for="requires_assembly">Requires Assembly?</label>
-  <input type="checkbox" id="requires_assembly" name="requires_assembly">
-
-  <label for="room_num">Room Number:</label>
-  <input type="text" id="room_num" name="room_num" required>
-
-  <label for="shelf_num">Shelf Number:</label>
-  <input type="text" id="shelf_num" name="shelf_num" required>
+  <div id="pieces_container">
+    <h3>Pieces</h3>
+    <button type="button" onclick="addPiece()">Add Piece</button>
+    <div class="piece-item">
+      <label>Piece Description:</label>
+      <input type="text" name="piece_descriptions[]" required>
+      <label>Length:</label>
+      <input type="text" name="piece_lengths[]">
+      <label>Width:</label>
+      <input type="text" name="piece_widths[]">
+      <label>Height:</label>
+      <input type="text" name="piece_heights[]">
+      <label>Room Number:</label>
+      <input type="text" name="piece_room_nums[]" required>
+      <label>Shelf Number:</label>
+      <input type="text" name="piece_shelf_nums[]" required>
+      <label>Notes:</label>
+      <input type="text" name="piece_notes[]">
+      <!-- 第一个 piece 没有删除按钮 -->
+    </div>
+  </div>
 
   <button type="submit">Accept Donation</button>
 </form>
+
+<script>
+  const piecesContainer = document.getElementById('pieces_container');
+
+  // 添加新的 Piece 输入区域
+  function addPiece() {
+    const pieceDiv = document.createElement('div');
+    pieceDiv.classList.add('piece-item');
+    pieceDiv.innerHTML = `
+      <label>Piece Description:</label>
+      <input type="text" name="piece_descriptions[]" required>
+      <label>Length:</label>
+      <input type="text" name="piece_lengths[]">
+      <label>Width:</label>
+      <input type="text" name="piece_widths[]">
+      <label>Height:</label>
+      <input type="text" name="piece_heights[]">
+      <label>Room Number:</label>
+      <input type="text" name="piece_room_nums[]" required>
+      <label>Shelf Number:</label>
+      <input type="text" name="piece_shelf_nums[]" required>
+      <label>Notes:</label>
+      <input type="text" name="piece_notes[]">
+      <button type="button" class="delete-piece" onclick="deletePiece(this)">Delete</button>
+    `;
+    piecesContainer.appendChild(pieceDiv);
+  }
+
+  // 删除 Piece 输入区域
+  function deletePiece(button) {
+    const pieceDiv = button.parentElement;
+
+    // 确保至少保留一个 Piece
+    if (piecesContainer.querySelectorAll('.piece-item').length > 1) {
+      pieceDiv.remove();
+    } else {
+      alert("At least one piece is required.");
+    }
+  }
+
+  // 确保页面加载后初始化
+  document.addEventListener("DOMContentLoaded", () => {
+    if (piecesContainer.querySelectorAll('.piece-item').length === 0) {
+      addPiece();
+    }
+  });
+</script>
 {% endblock %}

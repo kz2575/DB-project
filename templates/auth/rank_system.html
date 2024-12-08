@@ -1,0 +1,41 @@
+{% extends 'base.html' %}
+
+{% block title %}Rank System{% endblock %}
+
+{% block header %}
+<h2>Rank System</h2>
+{% endblock %}
+
+{% block content %}
+<form method="post" class="form-container">
+  <label for="start_date">Start Date:</label>
+  <input type="date" id="start_date" name="start_date" required>
+
+  <label for="end_date">End Date:</label>
+  <input type="date" id="end_date" name="end_date" required>
+
+  <button type="submit">View Rankings</button>
+</form>
+
+{% if results %}
+  <h3>Rankings</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>Rank</th>
+        <th>Volunteer</th>
+        <th>Task Count</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in results %}
+      <tr>
+        <td>{{ loop.index }}</td>
+        <td>{{ row.volunteer }}</td>
+        <td>{{ row.task_count }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+{% endif %}
+{% endblock %}

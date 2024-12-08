@@ -3,7 +3,7 @@
 {% block title %}Find Order Items{% endblock %}
 
 {% block header %}
-<h2>Find Items in Order</h2>
+<h2>Find Order Items</h2>
 {% endblock %}
 
 {% block content %}
@@ -14,22 +14,26 @@
 </form>
 
 {% if results %}
-  <h3>Order Items and Storage Locations</h3>
+  <h3>Order Items and Their Locations</h3>
   <table>
     <thead>
       <tr>
         <th>Item ID</th>
+        <th>Piece Number</th>
+        <th>Piece Description</th>
         <th>Room Number</th>
         <th>Shelf Number</th>
       </tr>
     </thead>
     <tbody>
       {% for row in results %}
-        <tr>
-          <td>{{ row['itemID'] }}</td>
-          <td>{{ row['roomNum'] or 'N/A' }}</td>
-          <td>{{ row['shelfNum'] or 'N/A' }}</td>
-        </tr>
+      <tr>
+        <td>{{ row['itemID'] }}</td>
+        <td>{{ row['pieceNum'] or 'N/A' }}</td>
+        <td>{{ row['pDescription'] or 'N/A' }}</td>
+        <td>{{ row['roomNum'] or 'N/A' }}</td>
+        <td>{{ row['shelfNum'] or 'N/A' }}</td>
+      </tr>
       {% endfor %}
     </tbody>
   </table>

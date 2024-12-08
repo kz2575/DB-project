@@ -168,7 +168,9 @@ def create_auth_blueprint(login_manager: LoginManager):
         buttons = [
             {"name": "Find Item", "url": url_for('auth.find_item')},
             {"name": "Find Order", "url": url_for('auth.find_order')},
-            {"name": "Add to Order", "url": url_for('auth.add_to_order')}
+            {"name": "Add to Order", "url": url_for('auth.add_to_order')},
+            {"name": "User Tasks", "url": url_for('auth.user_tasks')},
+            {"name": "Rank System", "url": url_for('auth.rank_system')}
         ]
 
         if 'staff' in roles:
@@ -178,63 +180,77 @@ def create_auth_blueprint(login_manager: LoginManager):
         return render_template('auth/index.html', buttons=buttons)
 
     @bp.route('/find_item', methods=('GET', 'POST'))
+    @login_required
     def find_item():
         if request.method == 'POST':
             item_id = request.form['item_id']  # get item id
             db = get_db()
-            cursor = db.cursor()
+            cursor = db.cursor(dictionary=True)
             error = None
 
-            cursor.execute(
-                """
-                SELECT roomNum, shelfNum
-                FROM Piece
-                WHERE itemID = %s
-                """,
-                (item_id,)
-            )
-            results = cursor.fetchall()
+            try:
+                cursor.execute(
+                    """
+                    SELECT p.itemID, p.pieceNum, p.pDescription, p.roomNum, p.shelfNum
+                    FROM Piece p
+                    WHERE p.itemID = %s
+                    """,
+                    (item_id,)
+                )
+                results = cursor.fetchall()
 
-            if not results:
-                error = f"No storage locations found for Item ID: {item_id}"
+                if not results:
+                    error = f"No storage locations found for Item ID: {item_id}"
+            except Exception as e:
+                error = f"An error occurred while retrieving data: {e}"
 
             if error:
                 flash(error)
-                return render_template('auth/find_item.html')
-            else:
-                return render_template('auth/find_item.html', results=results)
+                return render_template('auth/find_item.html', results=None)
 
-        return render_template('auth/find_item.html')
+            return render_template('auth/find_item.html', results=results)
+
+        return render_template('auth/find_item.html', results=None)
 
     @bp.route('/find_order', methods=('GET', 'POST'))
+    @login_required
     def find_order():
+        db = get_db()
+        cursor = db.cursor(dictionary=True)
+        error = None
+        results = []
+
         if request.method == 'POST':
-            order_id = request.form['order_id']  # get order id
-            db = get_db()
-            cursor = db.cursor(dictionary=True)  # 使用 dictionary=True 获取字典形式的结果
-            error = None
+            order_id = request.form['order_id']
+            try:
+                cursor.execute(
+                    """
+                    SELECT 
+                        i.itemID, 
+                        p.pieceNum, 
+                        p.pDescription, 
+                        p.roomNum, 
+                        p.shelfNum
+                    FROM 
+                        ItemIn i
+                    LEFT JOIN 
+                        Piece p ON i.itemID = p.itemID
+                    WHERE 
+                        i.orderID = %s
+                    """,
+                    (order_id,)
+                )
+                results = cursor.fetchall()
 
-            cursor.execute(
-                """
-                SELECT i.itemID, p.roomNum, p.shelfNum
-                FROM ItemIn i
-                LEFT JOIN Piece p ON i.itemID = p.itemID
-                WHERE i.orderID = %s
-                """,
-                (order_id,)
-            )
-            results = cursor.fetchall()
+                if not results:
+                    error = f"No items found for Order ID: {order_id}"
+            except Exception as e:
+                error = f"An error occurred: {e}"
 
-            if not results:
-                error = f"No items found for Order ID: {order_id}"
+        if error:
+            flash(error)
 
-            if error:
-                flash(error)
-                return render_template('auth/find_order.html')
-            else:
-                return render_template('auth/find_order.html', results=results)
-
-        return render_template('auth/find_order.html')
+        return render_template('auth/find_order.html', results=results)
 
     def is_staff_user(username):
         db = get_db()
@@ -252,6 +268,9 @@ def create_auth_blueprint(login_manager: LoginManager):
             flash("You must be a staff member to accept donations.")
             return redirect(url_for('auth.index'))
 
+        db = get_db()
+        cursor = db.cursor(dictionary=True)
+
         if request.method == 'POST':
             donor_id = request.form['donor_id']
             item_description = request.form['item_description']
@@ -259,16 +278,34 @@ def create_auth_blueprint(login_manager: LoginManager):
             sub_category = request.form['sub_category']
             color = request.form['color']
             material = request.form['material']
-            is_new = request.form.get('is_new', 'off') == 'on'
-            requires_assembly = request.form.get('requires_assembly', 'off') == 'on'
-            room_num = request.form['room_num']
-            shelf_num = request.form['shelf_num']
+            is_new = request.form.get('is_new', 'no') == 'yes'
 
-            db = get_db()
-            cursor = db.cursor(dictionary=True)
+            # 获取多个 piece 数据
+            piece_descriptions = request.form.getlist('piece_descriptions[]')
+            piece_lengths = request.form.getlist('piece_lengths[]')
+            piece_widths = request.form.getlist('piece_widths[]')
+            piece_heights = request.form.getlist('piece_heights[]')
+            piece_room_nums = request.form.getlist('piece_room_nums[]')
+            piece_shelf_nums = request.form.getlist('piece_shelf_nums[]')
+            piece_notes = request.form.getlist('piece_notes[]')
+
+            pieces = []
+            for i in range(len(piece_descriptions)):
+                pieces.append({
+                    "description": piece_descriptions[i],
+                    "length": float(piece_lengths[i]) if piece_lengths[i] else None,
+                    "width": float(piece_widths[i]) if piece_widths[i] else None,
+                    "height": float(piece_heights[i]) if piece_heights[i] else None,
+                    "room_num": piece_room_nums[i],
+                    "shelf_num": piece_shelf_nums[i],
+                    "notes": piece_notes[i] if piece_notes[i] else None
+                })
+
+            print(f"Number of pieces: {len(pieces)}")  # Debugging
+
             error = None
 
-            # 检查if donor
+            # 检查 donor 是否有效
             cursor.execute(
                 """
                 SELECT r.rDescription
@@ -288,15 +325,17 @@ def create_auth_blueprint(login_manager: LoginManager):
 
             if error is None:
                 try:
+                    # 插入 Item 数据
                     cursor.execute(
                         """
                         INSERT INTO Item (iDescription, mainCategory, subCategory, color, material, isNew, hasPieces)
                         VALUES (%s, %s, %s, %s, %s, %s, %s)
                         """,
-                        (item_description, main_category, sub_category, color, material, is_new, requires_assembly)
+                        (item_description, main_category, sub_category, color, material, is_new, len(pieces) > 1)
                     )
                     item_id = cursor.lastrowid
 
+                    # 插入 DonatedBy 数据
                     cursor.execute(
                         """
                         INSERT INTO DonatedBy (ItemID, userName, donateDate)
@@ -305,13 +344,17 @@ def create_auth_blueprint(login_manager: LoginManager):
                         (item_id, donor_id)
                     )
 
-                    cursor.execute(
-                        """
-                        INSERT INTO Piece (ItemID, pieceNum, roomNum, shelfNum, pDescription)
-                        VALUES (%s, %s, %s, %s, %s)
-                        """,
-                        (item_id, 1, room_num, shelf_num, f"Main piece of item {item_id}")
-                    )
+                    # 插入多个 Piece 数据
+                    for idx, piece in enumerate(pieces, start=1):
+                        cursor.execute(
+                            """
+                            INSERT INTO Piece (ItemID, pieceNum, pDescription, length, width, height, roomNum, shelfNum, pNotes)
+                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                            """,
+                            (item_id, idx, piece["description"], piece["length"], piece["width"], piece["height"],
+                             piece["room_num"], piece["shelf_num"], piece["notes"])
+                        )
+
                     db.commit()
                     flash("Donation accepted successfully.")
                     return redirect(url_for('auth.index'))
@@ -321,7 +364,18 @@ def create_auth_blueprint(login_manager: LoginManager):
 
             flash(error)
 
-        return render_template('auth/accept_donation.html')
+        # 获取动态分类信息
+        cursor.execute("SELECT DISTINCT mainCategory FROM Category")
+        main_categories = [row['mainCategory'] for row in cursor.fetchall()]
+
+        cursor.execute("SELECT DISTINCT subCategory FROM Category")
+        sub_categories = [row['subCategory'] for row in cursor.fetchall()]
+
+        return render_template(
+            'auth/accept_donation.html',
+            main_categories=main_categories,
+            sub_categories=sub_categories
+        )
 
     @bp.route('/start_order', methods=('GET', 'POST'))
     @login_required
@@ -464,66 +518,46 @@ def create_auth_blueprint(login_manager: LoginManager):
             selected_order_id=selected_order_id
         )
 
-    @bp.route('/prepare_order', methods=('GET', 'POST'))
+    @bp.route('/rank_system', methods=('GET', 'POST'))
     @login_required
-    def prepare_order():
+    def rank_system():
+        if not current_user.is_authenticated or not is_staff_user(current_user.username):
+            flash("You must be a staff member to view the rank system.")
+            return redirect(url_for('auth.index'))
+
         db = get_db()
         cursor = db.cursor(dictionary=True)
         error = None
-
-        orders = None  # 用于存储查询的订单列表
-        items = None  # 用于存储查询的物品列表
+        results = []
 
         if request.method == 'POST':
-            # 根据客户端用户名或订单号搜索
-            client_username = request.form.get('client_username')
-            order_id = request.form.get('order_id')
+            start_date = request.form['start_date']
+            end_date = request.form['end_date']
 
-            if client_username:
+            try:
+                # Query to get the count of tasks for each volunteer within the time period
                 cursor.execute(
                     """
-                    SELECT o.orderID, o.orderDate, o.orderNotes, u.first_name AS supervisor_name
-                    FROM Ordered o
-                    JOIN user u ON o.supervisor = u.username
-                    WHERE o.client = %s
+                    SELECT d.username AS volunteer, COUNT(d.orderID) AS task_count
+                    FROM Delivered d
+                    JOIN Ordered o ON d.orderID = o.orderID
+                    WHERE o.orderDate BETWEEN %s AND %s
+                    GROUP BY d.username
+                    ORDER BY task_count DESC
                     """,
-                    (client_username,)
+                    (start_date, end_date)
                 )
-                orders = cursor.fetchall()
+                results = cursor.fetchall()
 
-            elif order_id:
-                cursor.execute(
-                    """
-                    SELECT o.orderID, o.orderDate, o.orderNotes, u.first_name AS supervisor_name
-                    FROM Ordered o
-                    JOIN user u ON o.supervisor = u.username
-                    WHERE o.orderID = %s
-                    """,
-                    (order_id,)
-                )
-                orders = cursor.fetchall()
+                if not results:
+                    error = "No tasks found in the given time period."
+            except Exception as e:
+                error = f"An error occurred: {e}"
 
-            # 更新物品状态为“等待配送”
-            if request.form.get('update_order') and order_id:
-                try:
-                    cursor.execute(
-                        """
-                        UPDATE ItemIn
-                        SET found = TRUE
-                        WHERE orderID = %s
-                        """,
-                        (order_id,)
-                    )
-                    db.commit()
-                    flash(f"Order {order_id} marked as ready for delivery.")
-                except Exception as e:
-                    db.rollback()
-                    error = f"An error occurred: {e}"
+            if error:
+                flash(error)
 
-        if error:
-            flash(error)
-
-        return render_template('auth/prepare_order.html', orders=orders, items=items)
+        return render_template('auth/rank_system.html', results=results)
 
     @bp.route('/user_tasks', methods=('GET',))
     @login_required
@@ -531,42 +565,104 @@ def create_auth_blueprint(login_manager: LoginManager):
         db = get_db()
         cursor = db.cursor(dictionary=True)
 
-        # 根据当前用户角色获取相关订单信息
+        # Initialize variables
+        orders = None
+        user_role = None
+
         if current_user.is_authenticated:
-            user_role = None
+            # Determine the user's role
             cursor.execute(
-                "SELECT r.rDescription FROM Act a JOIN Role r ON a.roleID = r.roleID WHERE a.userName = %s",
+                """
+                SELECT r.rDescription
+                FROM Act a
+                JOIN Role r ON a.roleID = r.roleID
+                WHERE a.userName = %s
+                """,
                 (current_user.username,)
             )
             user_role = cursor.fetchone()
 
-            if user_role and user_role['rDescription'] == 'client':
-                cursor.execute(
-                    """
-                    SELECT o.orderID, o.orderDate, o.orderNotes
-                    FROM Ordered o
-                    WHERE o.client = %s
-                    """,
-                    (current_user.username,)
-                )
-                orders = cursor.fetchall()
+            if user_role:
+                role_description = user_role['rDescription']
 
-            elif user_role and user_role['rDescription'] == 'volunteer':
-                cursor.execute(
-                    """
-                    SELECT o.orderID, o.orderDate, o.orderNotes, u.first_name AS client_name
-                    FROM Ordered o
-                    JOIN user u ON o.client = u.username
-                    WHERE o.orderID IN (
-                        SELECT DISTINCT orderID
-                        FROM ItemIn
+                if role_description == 'client':
+                    # Fetch orders where the user is the client
+                    cursor.execute(
+                        """
+                        SELECT o.orderID, o.orderDate, o.orderNotes, o.supervisor
+                        FROM Ordered o
+                        WHERE o.client = %s
+                        """,
+                        (current_user.username,)
                     )
-                    """
-                )
-                orders = cursor.fetchall()
-            else:
-                orders = None
+                    orders = cursor.fetchall()
 
-        return render_template('auth/user_tasks.html', orders=orders)
+
+                elif role_description == 'staff':
+
+                    # Fetch orders where the user is the supervisor
+
+                    cursor.execute(
+
+                        """
+
+                        SELECT o.orderID, o.orderDate, o.orderNotes, o.supervisor, u.first_name AS client_name
+
+                        FROM Ordered o
+
+                        JOIN User u ON o.client = u.username
+
+                        WHERE o.supervisor = %s
+
+                        """,
+
+                        (current_user.username,)
+
+                    )
+
+                    staff_orders = cursor.fetchall()
+
+                    # Fetch orders from Delivered where the user is listed
+
+                    cursor.execute(
+
+                        """
+
+                        SELECT o.orderID, o.orderDate, o.orderNotes, d.username AS volunteer, o.supervisor, u.first_name AS client_name
+
+                        FROM Delivered d
+
+                        JOIN Ordered o ON d.orderID = o.orderID
+
+                        JOIN User u ON o.client = u.username
+
+                        WHERE d.username = %s
+
+                        """,
+
+                        (current_user.username,)
+
+                    )
+
+                    delivered_orders = cursor.fetchall()
+
+                    orders_dict = {order['orderID']: order for order in (staff_orders + delivered_orders)}
+                    orders = list(orders_dict.values())
+
+                elif role_description == 'volunteer':
+                    # Fetch orders where the user is assigned in the Delivered table
+                    cursor.execute(
+                        """
+                        SELECT o.orderID, o.orderDate, o.orderNotes, u.first_name AS client_name, o.supervisor
+                        FROM Delivered d
+                        JOIN Ordered o ON d.orderID = o.orderID
+                        JOIN User u ON o.client = u.username
+                        WHERE d.username = %s
+                        """,
+                        (current_user.username,)
+                    )
+                    orders = cursor.fetchall()
+
+        return render_template('auth/user_tasks.html', orders=orders, user_role=user_role)
 
     return bp

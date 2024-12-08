@@ -1,15 +1,40 @@
 {% extends 'base.html' %}
+
 {% block title %}User Tasks{% endblock %}
 
+{% block header %}
+<h2>User Tasks</h2>
+{% endblock %}
+
 {% block content %}
-<h2>Your Orders</h2>
+<h3>Your Related Orders</h3>
+
 {% if orders %}
-    <ul>
-        {% for order in orders %}
-            <li>Order ID: {{ order.orderID }}, Date: {{ order.orderDate }}, Notes: {{ order.orderNotes }}</li>
-        {% endfor %}
-    </ul>
+    <table>
+        <thead>
+            <tr>
+                <th>Order ID</th>
+                <th>Order Date</th>
+                <th>Order Notes</th>
+                <th>Client Name</th>
+                <th>Supervisor</th>
+                <th>Volunteer (if applicable)</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for order in orders %}
+                <tr>
+                    <td>{{ order['orderID'] }}</td>
+                    <td>{{ order['orderDate'] }}</td>
+                    <td>{{ order['orderNotes'] or 'N/A' }}</td>
+                    <td>{{ order['client_name'] or 'N/A' }}</td>
+                    <td>{{ order['supervisor'] }}</td>
+                    <td>{{ order['volunteer'] or 'N/A' }}</td>
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
 {% else %}
-    <p>No orders found related to your account.</p>
+    <p>No related orders found.</p>
 {% endif %}
 {% endblock %}

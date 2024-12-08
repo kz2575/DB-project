@@ -46,6 +46,7 @@ CREATE TABLE Item (
 CREATE TABLE PersonPhone (
     userName VARCHAR(50),
     phone VARCHAR(15),
+    PRIMARY KEY (userName, phone),
     FOREIGN KEY (userName) REFERENCES User(userName)
 );
 
@@ -53,6 +54,7 @@ CREATE TABLE DonatedBy (
     itemID INT,
     userName VARCHAR(50),
     donateDate DATE,
+    PRIMARY KEY (itemID, userName),
     FOREIGN KEY (itemID) REFERENCES Item(itemID),
     FOREIGN KEY (userName) REFERENCES User(userName)
 );
@@ -105,6 +107,7 @@ CREATE TABLE ItemIn (
     itemID INT,
     orderID INT,
     found BOOLEAN,
+    PRIMARY KEY (itemID, orderID),
     FOREIGN KEY (itemID) REFERENCES Item(itemID),
     FOREIGN KEY (orderID) REFERENCES Ordered(orderID)
 );
@@ -114,8 +117,29 @@ CREATE TABLE Delivered (
     orderID INT,
     status VARCHAR(50),
     date DATE,
+    PRIMARY KEY (userName, orderID),
     FOREIGN KEY (userName) REFERENCES User(userName),
     FOREIGN KEY (orderID) REFERENCES Ordered(orderID)
 );
 
 INSERT INTO Role (rDescription) VALUES ('client'), ('volunteer'), ('staff'), ('donor');
+
+INSERT INTO Category (mainCategory, subCategory, catNotes)
+VALUES
+('mc1', 'sc1', 'Category Note 1'),
+('mc1', 'sc2', 'Category Note 2'),
+('mc2', 'sc1', 'Category Note 3'),
+('mc2', 'sc2', 'Category Note 4');
+
+INSERT INTO Location (roomNum, shelfNum, shelfDescription)
+VALUES
+(0, 0, 'Room 0 Shelf 0'),
+(0, 1, 'Room 0 Shelf 1'),
+(1, 0, 'Room 1 Shelf 0'),
+(1, 1, 'Room 1 Shelf 1');
+
+INSERT INTO Delivered (userName, orderID, status, date)
+VALUES
+    ('volunteer1', 1, 'Delivered', '2024-12-07'),
+    ('volunteer1', 2, 'In Progress', '2024-12-08'),
+    ('volunteer1', 3, 'Delivered', '2024-12-09');

@@ -3,33 +3,41 @@
 {% block title %}Find Item{% endblock %}
 
 {% block header %}
-<h2>Find Item Storage Locations</h2>
+<h2>Find Item</h2>
 {% endblock %}
 
 {% block content %}
 <form method="post" class="form-container">
-  <label for="item_id">Enter Item ID:</label>
-  <input type="text" id="item_id" name="item_id" required placeholder="Enter Item ID">
-  <button type="submit">Search</button>
+    <label for="item_id">Enter Item ID:</label>
+    <input type="text" id="item_id" name="item_id" required>
+    <button type="submit">Search</button>
 </form>
 
 {% if results %}
-  <h3>Storage Locations</h3>
-  <table>
-    <thead>
-      <tr>
-        <th>Room Number</th>
-        <th>Shelf Number</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for row in results %}
-        <tr>
-          <td>{{ row['roomNum'] }}</td>
-          <td>{{ row['shelfNum'] }}</td>
-        </tr>
-      {% endfor %}
-    </tbody>
-  </table>
+    <h3>Storage Locations for Item Pieces</h3>
+    <table>
+        <thead>
+            <tr>
+                <th>Item ID</th>
+                <th>Piece Number</th>
+                <th>Description</th>
+                <th>Room Number</th>
+                <th>Shelf Number</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in results %}
+                <tr>
+                    <td>{{ row['itemID'] }}</td>
+                    <td>{{ row['pieceNum'] }}</td>
+                    <td>{{ row['pDescription'] }}</td>
+                    <td>{{ row['roomNum'] or 'N/A' }}</td>
+                    <td>{{ row['shelfNum'] or 'N/A' }}</td>
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+{% elif not results is none %}
+    <p>No pieces found for the given Item ID.</p>
 {% endif %}
 {% endblock %}
