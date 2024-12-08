@@ -154,7 +154,6 @@ def create_auth_blueprint(login_manager: LoginManager):
         db = get_db()
         cursor = db.cursor(dictionary=True)
 
-        # 获取当前用户的角色
         cursor.execute(
             """
             SELECT r.rDescription 
@@ -166,14 +165,12 @@ def create_auth_blueprint(login_manager: LoginManager):
         )
         roles = [row['rDescription'] for row in cursor.fetchall()]
 
-        # 定义基础功能按钮
         buttons = [
             {"name": "Find Item", "url": url_for('auth.find_item')},
             {"name": "Find Order", "url": url_for('auth.find_order')},
             {"name": "Add to Order", "url": url_for('auth.add_to_order')}
         ]
 
-        # 如果用户是 staff，则添加额外的功能按钮
         if 'staff' in roles:
             buttons.append({"name": "Accept Donation", "url": url_for('auth.accept_donation')})
             buttons.append({"name": "Start Order", "url": url_for('auth.start_order')})
@@ -271,10 +268,23 @@ def create_auth_blueprint(login_manager: LoginManager):
             cursor = db.cursor(dictionary=True)
             error = None
 
-            cursor.execute('SELECT * FROM User WHERE userName = %s', (donor_id,))
-            donor = cursor.fetchone()
-            if donor is None:
+            # 检查if donor
+            cursor.execute(
+                """
+                SELECT r.rDescription
+                FROM User u
+                JOIN Act a ON u.userName = a.userName
+                JOIN Role r ON a.roleID = r.roleID
+                WHERE u.userName = %s
+                """,
+                (donor_id,)
+            )
+            donor_role = cursor.fetchone()
+
+            if not donor_role:
                 error = f"Donor with ID {donor_id} is not registered."
+            elif donor_role['rDescription'] != 'donor':
+                error = f"User {donor_id} is not authorized as a donor."
 
             if error is None:
                 try:
@@ -364,7 +374,7 @@ def create_auth_blueprint(login_manager: LoginManager):
         cursor = db.cursor(dictionary=True)
         error = None
 
-        # 获取当前用户（client）关联的所有订单
+        # 获取当前用户关联订单
         cursor.execute(
             """
             SELECT o.orderID, o.orderDate, u.first_name AS supervisor_name, o.orderNotes
@@ -386,7 +396,7 @@ def create_auth_blueprint(login_manager: LoginManager):
         categories = cursor.fetchall()
 
         items = None  # 用于存储查询的物品列表
-        selected_order_id = None  # 用于存储用户选择的订单 ID
+        selected_order_id = None  # 存储ID
 
         if request.method == 'POST':
             selected_order_id = request.form.get('order_id')
@@ -453,5 +463,110 @@ def create_auth_blueprint(login_manager: LoginManager):
             items=items,
             selected_order_id=selected_order_id
         )
+
+    @bp.route('/prepare_order', methods=('GET', 'POST'))
+    @login_required
+    def prepare_order():
+        db = get_db()
+        cursor = db.cursor(dictionary=True)
+        error = None
+
+        orders = None  # 用于存储查询的订单列表
+        items = None  # 用于存储查询的物品列表
+
+        if request.method == 'POST':
+            # 根据客户端用户名或订单号搜索
+            client_username = request.form.get('client_username')
+            order_id = request.form.get('order_id')
+
+            if client_username:
+                cursor.execute(
+                    """
+                    SELECT o.orderID, o.orderDate, o.orderNotes, u.first_name AS supervisor_name
+                    FROM Ordered o
+                    JOIN user u ON o.supervisor = u.username
+                    WHERE o.client = %s
+                    """,
+                    (client_username,)
+                )
+                orders = cursor.fetchall()
+
+            elif order_id:
+                cursor.execute(
+                    """
+                    SELECT o.orderID, o.orderDate, o.orderNotes, u.first_name AS supervisor_name
+                    FROM Ordered o
+                    JOIN user u ON o.supervisor = u.username
+                    WHERE o.orderID = %s
+                    """,
+                    (order_id,)
+                )
+                orders = cursor.fetchall()
+
+            # 更新物品状态为“等待配送”
+            if request.form.get('update_order') and order_id:
+                try:
+                    cursor.execute(
+                        """
+                        UPDATE ItemIn
+                        SET found = TRUE
+                        WHERE orderID = %s
+                        """,
+                        (order_id,)
+                    )
+                    db.commit()
+                    flash(f"Order {order_id} marked as ready for delivery.")
+                except Exception as e:
+                    db.rollback()
+                    error = f"An error occurred: {e}"
+
+        if error:
+            flash(error)
+
+        return render_template('auth/prepare_order.html', orders=orders, items=items)
+
+    @bp.route('/user_tasks', methods=('GET',))
+    @login_required
+    def user_tasks():
+        db = get_db()
+        cursor = db.cursor(dictionary=True)
+
+        # 根据当前用户角色获取相关订单信息
+        if current_user.is_authenticated:
+            user_role = None
+            cursor.execute(
+                "SELECT r.rDescription FROM Act a JOIN Role r ON a.roleID = r.roleID WHERE a.userName = %s",
+                (current_user.username,)
+            )
+            user_role = cursor.fetchone()
+
+            if user_role and user_role['rDescription'] == 'client':
+                cursor.execute(
+                    """
+                    SELECT o.orderID, o.orderDate, o.orderNotes
+                    FROM Ordered o
+                    WHERE o.client = %s
+                    """,
+                    (current_user.username,)
+                )
+                orders = cursor.fetchall()
+
+            elif user_role and user_role['rDescription'] == 'volunteer':
+                cursor.execute(
+                    """
+                    SELECT o.orderID, o.orderDate, o.orderNotes, u.first_name AS client_name
+                    FROM Ordered o
+                    JOIN user u ON o.client = u.username
+                    WHERE o.orderID IN (
+                        SELECT DISTINCT orderID
+                        FROM ItemIn
+                    )
+                    """
+                )
+                orders = cursor.fetchall()
+            else:
+                orders = None
+
+        return render_template('auth/user_tasks.html', orders=orders)
 
     return bp

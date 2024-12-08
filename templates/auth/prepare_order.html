@@ -1,0 +1,30 @@
+{% extends 'base.html' %}
+{% block title %}Prepare Order{% endblock %}
+
+{% block content %}
+<h2>Prepare Order</h2>
+<form method="POST">
+    <label for="client_username">Search by Client Username:</label>
+    <input type="text" name="client_username">
+    <br>
+    <label for="order_id">Search by Order ID:</label>
+    <input type="text" name="order_id">
+    <br>
+    <button type="submit">Search</button>
+</form>
+
+{% if orders %}
+    <h3>Orders</h3>
+    <ul>
+        {% for order in orders %}
+            <li>Order ID: {{ order.orderID }}, Supervisor: {{ order.supervisor_name }},
+                Notes: {{ order.orderNotes }}
+            </li>
+        {% endfor %}
+    </ul>
+    <form method="POST">
+        <input type="hidden" name="order_id" value="{{ orders[0].orderID }}">
+        <button type="submit" name="update_order">Mark as Ready for Delivery</button>
+    </form>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,15 @@
+{% extends 'base.html' %}
+{% block title %}User Tasks{% endblock %}
+
+{% block content %}
+<h2>Your Orders</h2>
+{% if orders %}
+    <ul>
+        {% for order in orders %}
+            <li>Order ID: {{ order.orderID }}, Date: {{ order.orderDate }}, Notes: {{ order.orderNotes }}</li>
+        {% endfor %}
+    </ul>
+{% else %}
+    <p>No orders found related to your account.</p>
+{% endif %}
+{% endblock %}
