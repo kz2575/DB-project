@@ -280,7 +280,6 @@ def create_auth_blueprint(login_manager: LoginManager):
             material = request.form['material']
             is_new = request.form.get('is_new', 'no') == 'yes'
 
-            # 获取多个 piece 数据
             piece_descriptions = request.form.getlist('piece_descriptions[]')
             piece_lengths = request.form.getlist('piece_lengths[]')
             piece_widths = request.form.getlist('piece_widths[]')
@@ -305,7 +304,6 @@ def create_auth_blueprint(login_manager: LoginManager):
 
             error = None
 
-            # 检查 donor 是否有效
             cursor.execute(
                 """
                 SELECT r.rDescription
@@ -325,7 +323,6 @@ def create_auth_blueprint(login_manager: LoginManager):
 
             if error is None:
                 try:
-                    # 插入 Item 数据
                     cursor.execute(
                         """
                         INSERT INTO Item (iDescription, mainCategory, subCategory, color, material, isNew, hasPieces)
@@ -335,7 +332,6 @@ def create_auth_blueprint(login_manager: LoginManager):
                     )
                     item_id = cursor.lastrowid
 
-                    # 插入 DonatedBy 数据
                     cursor.execute(
                         """
                         INSERT INTO DonatedBy (ItemID, userName, donateDate)
@@ -344,7 +340,6 @@ def create_auth_blueprint(login_manager: LoginManager):
                         (item_id, donor_id)
                     )
 
-                    # 插入多个 Piece 数据
                     for idx, piece in enumerate(pieces, start=1):
                         cursor.execute(
                             """
@@ -364,7 +359,6 @@ def create_auth_blueprint(login_manager: LoginManager):
 
             flash(error)
 
-        # 获取动态分类信息
         cursor.execute("SELECT DISTINCT mainCategory FROM Category")
         main_categories = [row['mainCategory'] for row in cursor.fetchall()]
 
@@ -390,7 +384,6 @@ def create_auth_blueprint(login_manager: LoginManager):
             client_username = request.form['client_username']
             error = None
 
-            # 验证用户名
             cursor.execute('SELECT * FROM user WHERE userName = %s', (client_username,))
             client = cursor.fetchone()
             if not client:
@@ -398,7 +391,6 @@ def create_auth_blueprint(login_manager: LoginManager):
 
             if error is None:
                 try:
-                    # 创建订单
                     cursor.execute(
                         """
                         INSERT INTO Ordered (orderDate, supervisor, client)
@@ -428,7 +420,6 @@ def create_auth_blueprint(login_manager: LoginManager):
         cursor = db.cursor(dictionary=True)
         error = None
 
-        # 获取当前用户关联订单
         cursor.execute(
             """
             SELECT o.orderID, o.orderDate, u.first_name AS supervisor_name, o.orderNotes
@@ -445,12 +436,11 @@ def create_auth_blueprint(login_manager: LoginManager):
             flash("No active orders found for your account.")
             return redirect(url_for('auth.index'))
 
-        # 获取类别和子类别
         cursor.execute("SELECT DISTINCT mainCategory, subCategory FROM Category")
         categories = cursor.fetchall()
 
-        items = None  # 用于存储查询的物品列表
-        selected_order_id = None  # 存储ID
+        items = None
+        selected_order_id = None
 
         if request.method == 'POST':
             selected_order_id = request.form.get('order_id')
@@ -463,7 +453,6 @@ def create_auth_blueprint(login_manager: LoginManager):
             elif not any(order['orderID'] == int(selected_order_id) for order in orders):
                 error = "The selected order does not belong to your account."
             elif main_category and sub_category:
-                # 查询属于指定类别且未被订购的物品
                 cursor.execute(
                     """
                     SELECT i.itemID, i.iDescription, i.color, i.isNew, i.material
@@ -480,29 +469,16 @@ def create_auth_blueprint(login_manager: LoginManager):
 
             if item_id and not error:
                 try:
-                    # 检查物品是否已在其他订单中
                     cursor.execute(
                         """
-                        SELECT itemID FROM ItemIn 
-                        WHERE itemID = %s AND orderID != %s
+                        INSERT INTO ItemIn (itemID, orderID, found)
+                        VALUES (%s, %s, %s)
                         """,
-                        (item_id, selected_order_id)
+                        (item_id, selected_order_id, False)
                     )
-                    existing_item = cursor.fetchone()
-                    if existing_item:
-                        error = f"Item {item_id} is already added to another order."
-                    else:
-                        # 将物品添加到订单
-                        cursor.execute(
-                            """
-                            INSERT INTO ItemIn (itemID, orderID, found)
-                            VALUES (%s, %s, %s)
-                            """,
-                            (item_id, selected_order_id, False)
-                        )
-                        db.commit()
-                        flash(f"Item {item_id} added to order {selected_order_id} successfully.")
-                        return redirect(request.url)
+                    db.commit()
+                    flash(f"Item {item_id} added to order {selected_order_id} successfully.")
+                    return redirect(request.url)
                 except Exception as e:
                     db.rollback()
                     error = f"An error occurred: {e}"
@@ -535,7 +511,6 @@ def create_auth_blueprint(login_manager: LoginManager):
             end_date = request.form['end_date']
 
             try:
-                # Query to get the count of tasks for each volunteer within the time period
                 cursor.execute(
                     """
                     SELECT d.username AS volunteer, COUNT(d.orderID) AS task_count
@@ -564,13 +539,10 @@ def create_auth_blueprint(login_manager: LoginManager):
     def user_tasks():
         db = get_db()
         cursor = db.cursor(dictionary=True)
-
-        # Initialize variables
         orders = None
         user_role = None
 
         if current_user.is_authenticated:
-            # Determine the user's role
             cursor.execute(
                 """
                 SELECT r.rDescription
@@ -586,7 +558,6 @@ def create_auth_blueprint(login_manager: LoginManager):
                 role_description = user_role['rDescription']
 
                 if role_description == 'client':
-                    # Fetch orders where the user is the client
                     cursor.execute(
                         """
                         SELECT o.orderID, o.orderDate, o.orderNotes, o.supervisor
@@ -599,21 +570,13 @@ def create_auth_blueprint(login_manager: LoginManager):
 
 
                 elif role_description == 'staff':
-
-                    # Fetch orders where the user is the supervisor
-
                     cursor.execute(
 
                         """
-
                         SELECT o.orderID, o.orderDate, o.orderNotes, o.supervisor, u.first_name AS client_name
-
                         FROM Ordered o
-
                         JOIN User u ON o.client = u.username
-
                         WHERE o.supervisor = %s
-
                         """,
 
                         (current_user.username,)
@@ -621,23 +584,14 @@ def create_auth_blueprint(login_manager: LoginManager):
                     )
 
                     staff_orders = cursor.fetchall()
-
-                    # Fetch orders from Delivered where the user is listed
-
                     cursor.execute(
 
                         """
-
                         SELECT o.orderID, o.orderDate, o.orderNotes, d.username AS volunteer, o.supervisor, u.first_name AS client_name
-
                         FROM Delivered d
-
                         JOIN Ordered o ON d.orderID = o.orderID
-
                         JOIN User u ON o.client = u.username
-
                         WHERE d.username = %s
-
                         """,
 
                         (current_user.username,)
@@ -650,7 +604,6 @@ def create_auth_blueprint(login_manager: LoginManager):
                     orders = list(orders_dict.values())
 
                 elif role_description == 'volunteer':
-                    # Fetch orders where the user is assigned in the Delivered table
                     cursor.execute(
                         """
                         SELECT o.orderID, o.orderDate, o.orderNotes, u.first_name AS client_name, o.supervisor
